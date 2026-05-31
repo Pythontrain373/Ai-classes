@@ -42,9 +42,12 @@ def query_hf_api(payload: dict):
     except requests.RequestException as e:
         return None, f"Request failed: {e}"
     if r.status_code != 200:
-        j = r.json()
-        msg = j.get("error", {}).strip() or r.reason or "Request failed."
-        return None, f"Status {r.status_code}: {msg}"
+        try:
+            j = r.json()
+            msg = j.get("error", {}).strip() or r.reason or "Request failed."
+            return None, f"Status {r.status_code}: {msg}"
+        except Exception:
+            return None, "Non-JSON response received from the API."
     try:
         return r.json(), None
     except Exception:
@@ -123,4 +126,44 @@ def main():
     
     basic_caption=get_basic_caption(image_path)
     print(f"{Fore.YELLOW}Basic caption: {Style.BRIGHT}{basic_caption}\n")
-    
+    while True:
+        print_menu()
+        choice=input(f"{Fore.BLUE}Enter your choice (1-4): {Style.RESET_ALL}").strip()
+        if basic_caption.startswith("[Error]") and choice in {"1","2","3"}:
+            get_basic_caption(image_path)
+            print(f"{Fore.YELLOW}Basic caption: {basic_caption}\n")
+        if choice=="1":
+            if basic_caption.startswith("[Error]"):
+                print(f"{Fore.RED}Caption (5 words): {Style.BRIGHT}{basic_caption}\n")
+            else:
+                out=_ensure_sentence_end(_exact_n_words(basic_caption,5))
+                print(f"{Fore.YELLOW}Caption (5 words): {Style.BRIGHT}{out}\n")
+
+        elif choice=="2":
+            if basic_caption.startswith("[Error]"):
+                print(f"{Fore.RED} Failed to generate description: {basic_caption}\n")
+                continue
+            prompt=("Rewrite as exactly 30 words. Single paragraph. One complete sentence. End with a period. No title/bullets.\n\nText:"+basic_caption)
+            try:
+                out=generate_exact_sentence(prompt,30,max_new_tokens=220, tries=6)
+                print(f"{Fore.GREEN} Description (30 words): {Fore.YELLOW}{Style.BRIGHT}{out}\n")
+            except Exception as e:
+                print(f"{Fore.RED}Failed to generate description: {e}\n")
+        elif choice=="3":
+            if basic_caption.startswith("[Error]"):
+                print(f"{Fore.RED} Failed to generate summary: {basic_caption}\n")
+                continue
+            prompt=("Rewrite as exactly 50 words. Single paragraph. One complete sentence. End with a period. No title/bullets.\n\nText:"+basic_caption)
+            try:
+                out=generate_exact_sentence(prompt,50,max_new_tokens=280, tries=7)
+                print(f"{Fore.GREEN} Summary (50 words): {Fore.YELLOW}{Style.BRIGHT}{out}\n")
+            except Exception as e:
+                print(f"{Fore.RED}Failed to generate summary: {e}\n")
+        elif choice=="4":
+            print(f"{Fore.CYAN}Exiting. Goodbye!")
+            break
+        else:
+            print(f"{Fore.RED}Invalid choice. Please enter a number between 1 and 4.\n")
+
+if __name__=="__main__":
+    main()
