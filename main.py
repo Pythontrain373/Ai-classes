@@ -1,24 +1,65 @@
-from groq import generate_response 
+# main.py (Streamlit)
+# Switch provider by changing the import line:
+from groq import generate_response
+# from hf import generate_response
 
-def prompt_engineering_activity():
-    print("Welcome to the AI Prompt Engineering Tutorial!")
+import re
+import streamlit as st
 
-    vague = input("Enter a vague prompt: ")
-    print("\nAI's response to vague prompt:")
-    print(generate_response(vague))
+def looks_incomplete(text: str) -> bool:
+    if not text or len(text.strip()) < 10:
+        return True
+    t = text.strip()
+    # common "cut" signs: ends mid-word, mid-markdown, or no closing punctuation
+    if t.endswith(("**", "*", "-", "—", ":", ",", "(", "[", "{")):
+        return True
+    if re.search(r"\d+\.\s*\*\*$", t):  # like "3. **"
+        return True
+    if not re.search(r"[.!?]\s*$", t):  # no sentence-ending punctuation
+        return True
+    return False
 
-    specific = input("\nNow, make it more specific: ")
-    print("\nAI's response to specific prompt:")
-    print(generate_response(specific))
+def complete_answer(question: str, max_rounds: int = 2) -> str:
+    # 1) Ask for a clean structured answer (helps avoid unfinished bullets)
+    base_prompt = (
+        "Answer clearly in numbered points. "
+        "Do not cut sentences. Finish each point fully.\n\n"
+        f"Question: {question}"
+    )
 
-    context = input("\nNow, add context to your specific prompt: ")
-    print("\nAI's response to contextual prompt:")
-    print(generate_response(context))
+    ans = generate_response(base_prompt, temperature=0.3, max_tokens=1024)
 
-    print("\n--- Reflection ---")
-    print("1. How did the AI's response change when the prompt was made more specific?")
-    print("2. How did the AI's response improve with the added context?")
-    print("3. Which prompt produced the most relevant and tailored response? Why?")
+    # 2) If it looks cut, continue from last line without repeating
+    rounds = 0
+    while rounds < max_rounds and looks_incomplete(ans):
+        cont_prompt = (
+            "Continue EXACTLY from where you stopped. "
+            "Do NOT repeat earlier text. "
+            "Finish the incomplete point and complete the answer.\n\n"
+            f"Question: {question}\n\n"
+            f"Answer so far:\n{ans}\n\nContinue:"
+        )
+        more = generate_response(cont_prompt, temperature=0.3, max_tokens=1024)
+        if not more or more.strip() in ans:
+            break
+        ans = (ans.rstrip() + "\n" + more.lstrip()).strip()
+        rounds += 1
+
+    return ans
+
+def main():
+    st.title("AI Teaching Assistant")
+    st.write("Welcome! You can ask me anything about various subjects, and I'll provide an answer.")
+
+    user_input = st.text_input("Enter your question here:")
+
+    if user_input:
+        st.write(f"**Your question:** {user_input}")
+        response = complete_answer(user_input)
+        st.write("**AI's answer:**")
+        st.markdown(response)  # markdown renders numbered points nicely
+    else:
+        st.info("Please enter a question to ask.")
 
 if __name__ == "__main__":
-    prompt_engineering_activity()
+    main()
